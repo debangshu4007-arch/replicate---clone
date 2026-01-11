@@ -45,7 +45,7 @@ function parseProperty(
 ): FormField | null {
   // Resolve allOf, anyOf, oneOf
   const resolvedSchema = resolveCompositeSchema(schema);
-  
+
   const baseField: Partial<FormField> = {
     name,
     label: formatLabel(resolvedSchema.title || name),
@@ -58,7 +58,7 @@ function parseProperty(
 
   // Determine field type based on schema
   const fieldType = determineFieldType(resolvedSchema);
-  
+
   switch (fieldType) {
     case 'select':
       return {
@@ -131,24 +131,75 @@ function parseProperty(
 
 /**
  * Resolve composite schemas (allOf, anyOf, oneOf)
+ * 
+ * IMPORTANT: Many Replicate models define enums via anyOf/oneOf like:
+ * { anyOf: [{ const: 'webp' }, { const: 'png' }, { const: 'jpg' }] }
+ * or
+ * { anyOf: [{ enum: ['webp', 'png'] }, { type: 'null' }] }
+ * 
+ * We need to extract these as proper enum arrays for dropdown rendering.
  */
 function resolveCompositeSchema(schema: JSONSchema): JSONSchema {
+  // Handle allOf - merge all schemas
   if (schema.allOf && schema.allOf.length > 0) {
-    // Merge all schemas in allOf
-    return schema.allOf.reduce((merged, subSchema) => ({
-      ...merged,
+    const merged = schema.allOf.reduce((acc, subSchema) => ({
+      ...acc,
       ...subSchema,
-    }), { ...schema, allOf: undefined });
+      // Merge enums if present
+      enum: acc.enum || subSchema.enum,
+    }), { ...schema, allOf: undefined } as JSONSchema);
+    return merged;
   }
 
-  if (schema.anyOf && schema.anyOf.length > 0) {
-    // Take first option for simplicity
-    return { ...schema, ...schema.anyOf[0], anyOf: undefined };
-  }
+  // Handle anyOf/oneOf - try to extract enum values
+  const compositeArray = schema.anyOf || schema.oneOf;
+  if (compositeArray && compositeArray.length > 0) {
+    // Check if this is a "nullable enum" pattern (common in Replicate)
+    // e.g., anyOf: [{ enum: ['a', 'b'] }, { type: 'null' }]
+    const enumSubSchema = compositeArray.find(s => s.enum && s.enum.length > 0);
+    if (enumSubSchema?.enum) {
+      return {
+        ...schema,
+        ...enumSubSchema,
+        anyOf: undefined,
+        oneOf: undefined,
+      };
+    }
 
-  if (schema.oneOf && schema.oneOf.length > 0) {
-    // Take first option for simplicity
-    return { ...schema, ...schema.oneOf[0], oneOf: undefined };
+    // Check for "const" pattern (also common)
+    // e.g., anyOf: [{ const: 'webp' }, { const: 'png' }]
+    const constValues = compositeArray
+      .filter(s => s.const !== undefined)
+      .map(s => s.const);
+
+    if (constValues.length > 1) {
+      return {
+        ...schema,
+        enum: constValues,
+        type: 'string', // const values are typically strings
+        anyOf: undefined,
+        oneOf: undefined,
+      };
+    }
+
+    // Fallback: take first non-null option
+    const firstNonNull = compositeArray.find(s => s.type !== 'null');
+    if (firstNonNull) {
+      return {
+        ...schema,
+        ...firstNonNull,
+        anyOf: undefined,
+        oneOf: undefined,
+      };
+    }
+
+    // Last resort: take first option
+    return {
+      ...schema,
+      ...compositeArray[0],
+      anyOf: undefined,
+      oneOf: undefined,
+    };
   }
 
   return schema;
@@ -216,9 +267,9 @@ function determineFieldType(schema: JSONSchema): FormFieldType {
 function isFileField(schema: JSONSchema): boolean {
   const description = (schema.description || '').toLowerCase();
   const title = (schema.title || '').toLowerCase();
-  
+
   const fileKeywords = ['image', 'file', 'upload', 'audio', 'video', 'photo', 'picture'];
-  return fileKeywords.some(keyword => 
+  return fileKeywords.some(keyword =>
     description.includes(keyword) || title.includes(keyword)
   );
 }
@@ -229,15 +280,15 @@ function isFileField(schema: JSONSchema): boolean {
 function isTextAreaField(schema: JSONSchema): boolean {
   const name = (schema.title || '').toLowerCase();
   const description = (schema.description || '').toLowerCase();
-  
+
   // Check max length - longer fields should be textareas
   if (schema.maxLength && schema.maxLength > 200) {
     return true;
   }
-  
+
   // Check for prompt-like fields
   const textareaKeywords = ['prompt', 'text', 'message', 'content', 'description', 'caption', 'negative'];
-  return textareaKeywords.some(keyword => 
+  return textareaKeywords.some(keyword =>
     name.includes(keyword) || description.includes(keyword)
   );
 }
@@ -269,7 +320,7 @@ function determineStep(schema: JSONSchema): number {
  */
 function determineFileAccept(name: string, schema: JSONSchema): string {
   const combined = `${name} ${schema.description || ''} ${schema.title || ''}`.toLowerCase();
-  
+
   if (combined.includes('audio') || combined.includes('sound') || combined.includes('music')) {
     return 'audio/*';
   }
@@ -279,7 +330,7 @@ function determineFileAccept(name: string, schema: JSONSchema): string {
   if (combined.includes('image') || combined.includes('photo') || combined.includes('picture')) {
     return 'image/*';
   }
-  
+
   // Default to images as most common
   return 'image/*,video/*,audio/*';
 }
@@ -311,21 +362,21 @@ function formatEnumLabel(value: string): string {
 /**
  * Infer output type from schema for display purposes
  */
-export function inferOutputType(schema: JSONSchema | null | undefined): 
+export function inferOutputType(schema: JSONSchema | null | undefined):
   'image' | 'video' | 'audio' | 'text' | 'json' | 'array' | 'unknown' {
   if (!schema) return 'unknown';
 
   const resolvedSchema = resolveCompositeSchema(schema);
-  
+
   // Check format hints
   if (resolvedSchema.format === 'uri') {
     const description = (resolvedSchema.description || '').toLowerCase();
     const title = (resolvedSchema.title || '').toLowerCase();
-    
+
     if (description.includes('image') || title.includes('image')) return 'image';
     if (description.includes('video') || title.includes('video')) return 'video';
     if (description.includes('audio') || title.includes('audio')) return 'audio';
-    
+
     // URI could be image by default for many models
     return 'image';
   }
@@ -356,7 +407,7 @@ export function getSchemaDefaults(schema: JSONSchema | null | undefined): Record
   }
 
   const defaults: Record<string, unknown> = {};
-  
+
   for (const [name, propSchema] of Object.entries(schema.properties)) {
     if (propSchema && propSchema.default !== undefined) {
       defaults[name] = propSchema.default;
@@ -390,7 +441,7 @@ export function validateInput(
   // Check types and constraints
   for (const [name, propSchema] of Object.entries(schema.properties)) {
     if (!propSchema) continue;
-    
+
     const value = input[name];
     if (value === undefined || value === null) continue;
 

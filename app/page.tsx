@@ -1,152 +1,231 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Model, ModelFilters, ViewMode } from '@/types';
 import { ModelFiltersBar } from '@/components/models/model-filters';
 import { ModelGrid } from '@/components/models/model-grid';
-import { SkeletonModelGrid } from '@/components/ui/skeleton';
+import { ModelBrowser } from '@/components/models/model-browser';
+
+interface HealthCheckResponse {
+  status: 'healthy' | 'misconfigured';
+  replicateConfigured: boolean;
+  timestamp: string;
+  message?: string;
+  setupInstructions?: string[];
+}
+
+function SetupWarning({ instructions }: { instructions?: string[] }) {
+  return (
+    <div className="border border-yellow-800 bg-yellow-900/10 rounded-lg p-5 mb-6">
+      <div className="flex gap-3">
+        <span className="text-2xl">🔑</span>
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-yellow-400 mb-2">
+            API Token Required
+          </h2>
+          <p className="text-yellow-200/70 text-sm mb-4">
+            Configure your Replicate API token to get started.
+          </p>
+          <div className="bg-black/30 rounded p-3 font-mono text-xs space-y-1.5 text-yellow-100/80">
+            {instructions?.map((instruction, i) => (
+              <div key={i}>{instruction}</div>
+            )) || (
+                <>
+                  <div>1. Get token from <a href="https://replicate.com/account/api-tokens" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">replicate.com/account/api-tokens</a></div>
+                  <div>2. Create <code className="bg-black/40 px-1 rounded">.env.local</code> in project root</div>
+                  <div>3. Add: <code className="bg-black/40 px-1 rounded">REPLICATE_API_TOKEN=your_token</code></div>
+                  <div>4. Restart dev server</div>
+                </>
+              )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
-  const [models, setModels] = useState<Model[]>([]);
-  const [filteredModels, setFilteredModels] = useState<Model[]>([]);
+  const [curatedModels, setCuratedModels] = useState<Model[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [configError, setConfigError] = useState(false);
+  const [setupInstructions, setSetupInstructions] = useState<string[]>();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filters, setFilters] = useState<ModelFilters>({
     search: '',
     modality: 'all',
     tier: 'all',
+    mode: 'curated',
+    sort: 'popular',
   });
 
-  // Fetch models on mount
+  // Load curated models once
   useEffect(() => {
-    async function fetchModels() {
+    let cancelled = false;
+
+    async function init() {
       try {
-        setIsLoading(true);
-        setError(null);
-        
-        const response = await fetch('/api/models?featured=true');
-        if (!response.ok) {
-          throw new Error('Failed to fetch models');
+        // Health check
+        const healthRes = await fetch('/api/health');
+        const health: HealthCheckResponse = await healthRes.json();
+
+        if (!health.replicateConfigured) {
+          setConfigError(true);
+          setSetupInstructions(health.setupInstructions);
+          setIsLoading(false);
+          return;
         }
-        
-        const data = await response.json();
-        setModels(data.results || []);
+
+        // Fetch featured models
+        const modelsRes = await fetch('/api/models?featured=true');
+        const data = await modelsRes.json();
+
+        if (!modelsRes.ok) {
+          if (data.code === 'MISSING_API_TOKEN') {
+            setConfigError(true);
+            return;
+          }
+          throw new Error(data.error || 'Failed to load models');
+        }
+
+        if (!cancelled) {
+          setCuratedModels(data.results || []);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load models');
-        console.error('Error fetching models:', err);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load models');
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     }
 
-    fetchModels();
+    init();
+    return () => { cancelled = true; };
   }, []);
 
-  // Apply filters
-  useEffect(() => {
-    let result = [...models];
+  // Filter curated models (client-side)
+  const filteredModels = useMemo(() => {
+    if (filters.mode === 'browse') return [];
 
-    // Search filter
+    let result = [...curatedModels];
+
+    // Search
     if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      result = result.filter(
-        (model) =>
-          model.name.toLowerCase().includes(searchLower) ||
-          model.owner.toLowerCase().includes(searchLower) ||
-          model.description?.toLowerCase().includes(searchLower)
+      const q = filters.search.toLowerCase();
+      result = result.filter(m =>
+        m.name.toLowerCase().includes(q) ||
+        m.owner.toLowerCase().includes(q) ||
+        m.description?.toLowerCase().includes(q)
       );
     }
 
-    // Modality filter (basic heuristic based on model name/description)
+    // Modality
     if (filters.modality !== 'all') {
-      result = result.filter((model) => {
-        const combined = `${model.name} ${model.description || ''}`.toLowerCase();
+      result = result.filter(m => {
+        const text = `${m.name} ${m.description || ''}`.toLowerCase();
         switch (filters.modality) {
-          case 'image':
-            return combined.includes('image') || combined.includes('photo') || 
-                   combined.includes('diffusion') || combined.includes('stable') ||
-                   combined.includes('flux') || combined.includes('sdxl');
-          case 'video':
-            return combined.includes('video') || combined.includes('animate');
-          case 'audio':
-            return combined.includes('audio') || combined.includes('music') || 
-                   combined.includes('speech') || combined.includes('voice');
-          case 'text':
-            return combined.includes('llama') || combined.includes('gpt') ||
-                   combined.includes('text') || combined.includes('language') ||
-                   combined.includes('chat');
-          default:
-            return true;
+          case 'image': return /image|photo|diffusion|stable|flux|sdxl/.test(text);
+          case 'video': return /video|animate/.test(text);
+          case 'audio': return /audio|music|speech|voice/.test(text);
+          case 'text': return /llama|gpt|text|language|chat/.test(text);
+          default: return true;
         }
       });
     }
 
-    setFilteredModels(result);
-  }, [models, filters]);
+    // Sort
+    if (filters.sort === 'newest') {
+      result.sort((a, b) => {
+        const ta = a.latest_version?.created_at || '';
+        const tb = b.latest_version?.created_at || '';
+        return tb.localeCompare(ta);
+      });
+    } else {
+      result.sort((a, b) => (b.run_count || 0) - (a.run_count || 0));
+    }
+
+    return result;
+  }, [curatedModels, filters]);
 
   const handleFiltersChange = useCallback((newFilters: ModelFilters) => {
     setFilters(newFilters);
   }, []);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Hero Section */}
-      <div className="mb-12 text-center">
-        <h1 className="text-4xl font-bold mb-4">
-          Run AI Models in{' '}
-          <span className="gradient-text">Seconds</span>
+    <div className="container mx-auto px-4 py-6">
+      {/* Header */}
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold mb-2">
+          Run AI Models in <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Seconds</span>
         </h1>
-        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-          Browse and run state-of-the-art machine learning models. Generate images, 
-          videos, audio, and text using the latest AI technology.
+        <p className="text-gray-500 text-sm max-w-lg mx-auto">
+          Browse and run state-of-the-art ML models. Generate images, video, audio, and text.
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="mb-8">
-        <ModelFiltersBar
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          totalCount={filteredModels.length}
-        />
-      </div>
+      {/* Config error */}
+      {configError && <SetupWarning instructions={setupInstructions} />}
 
-      {/* Error State */}
-      {error && (
+      {/* Filters */}
+      {!configError && (
+        <div className="mb-6">
+          <ModelFiltersBar
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            totalCount={filters.mode === 'curated' ? filteredModels.length : undefined}
+          />
+        </div>
+      )}
+
+      {/* Error (non-config) */}
+      {error && !configError && filters.mode === 'curated' && (
         <div className="text-center py-12">
-          <div className="text-5xl mb-4">⚠️</div>
-          <p className="text-red-400 mb-4">{error}</p>
+          <p className="text-red-400 text-sm mb-3">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="text-blue-400 hover:text-blue-300"
+            className="text-xs text-blue-400 hover:underline"
           >
-            Try again
+            Reload
           </button>
         </div>
       )}
 
-      {/* Model Grid */}
-      {!error && (
-        <ModelGrid
-          models={filteredModels}
-          viewMode={viewMode}
-          isLoading={isLoading}
-          emptyMessage={
-            filters.search || filters.modality !== 'all'
-              ? 'No models match your filters'
-              : 'No models available'
-          }
-        />
-      )}
-
-      {/* Load More hint */}
-      {!isLoading && filteredModels.length > 0 && (
-        <div className="mt-8 text-center text-sm text-gray-500">
-          Showing {filteredModels.length} models
-        </div>
+      {/* Content */}
+      {!configError && (
+        filters.mode === 'browse' ? (
+          <ModelBrowser filters={filters} viewMode={viewMode} />
+        ) : (
+          <>
+            <ModelGrid
+              models={filteredModels}
+              viewMode={viewMode}
+              isLoading={isLoading}
+              emptyMessage={
+                filters.search || filters.modality !== 'all'
+                  ? 'No models match your filters'
+                  : 'No models available'
+              }
+            />
+            {!isLoading && filteredModels.length > 0 && (
+              <div className="mt-6 text-center">
+                <span className="text-xs text-gray-600">
+                  {filteredModels.length} featured models.{' '}
+                  <button
+                    onClick={() => setFilters(f => ({ ...f, mode: 'browse' }))}
+                    className="text-blue-400 hover:underline"
+                  >
+                    Browse all →
+                  </button>
+                </span>
+              </div>
+            )}
+          </>
+        )
       )}
     </div>
   );

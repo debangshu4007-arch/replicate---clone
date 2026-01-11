@@ -63,6 +63,7 @@ export interface JSONSchema {
   title?: string;
   description?: string;
   default?: unknown;
+  const?: unknown; // For const-based enum patterns
   enum?: unknown[];
   minimum?: number;
   maximum?: number;
@@ -84,7 +85,7 @@ export interface JSONSchema {
 // PREDICTION TYPES
 // ============================================================================
 
-export type PredictionStatus = 
+export type PredictionStatus =
   | 'starting'
   | 'processing'
   | 'succeeded'
@@ -157,13 +158,15 @@ export interface ModelFilters {
   search: string;
   modality: ModelModality | 'all';
   tier: ModelTier;
+  sort?: 'newest' | 'popular';
+  mode: 'curated' | 'browse';
 }
 
 // ============================================================================
 // FORM FIELD TYPES (for dynamic form generation)
 // ============================================================================
 
-export type FormFieldType = 
+export type FormFieldType =
   | 'text'
   | 'textarea'
   | 'number'

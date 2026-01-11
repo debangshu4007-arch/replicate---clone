@@ -12,6 +12,12 @@ import {
   ModelListResponse,
   OpenAPISchema,
 } from '@/types';
+import {
+  getReplicateToken,
+  ConfigurationError,
+  REPLICATE_TOKEN_ERROR,
+  ERROR_CODE_MISSING_TOKEN,
+} from './config';
 
 const REPLICATE_API_BASE = 'https://api.replicate.com/v1';
 
@@ -21,20 +27,6 @@ const RETRY_DELAY_MS = 1000;
 const RATE_LIMIT_RETRY_DELAY_MS = 5000;
 
 /**
- * Get API token from environment
- * Throws if not configured
- */
-function getApiToken(): string {
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) {
-    throw new Error(
-      'REPLICATE_API_TOKEN is not configured. Please add it to your .env file.'
-    );
-  }
-  return token;
-}
-
-/**
  * Generic fetch wrapper with retry logic and error handling
  */
 async function fetchWithRetry<T>(
@@ -42,8 +34,8 @@ async function fetchWithRetry<T>(
   options: RequestInit = {},
   retries = MAX_RETRIES
 ): Promise<T> {
-  const token = getApiToken();
-  
+  const token = getReplicateToken();
+
   const fetchOptions: RequestInit = {
     ...options,
     headers: {
@@ -123,12 +115,29 @@ export class ReplicateError extends Error {
 // ============================================================================
 
 /**
- * List all public models with pagination
+ * List all public models with cursor-based pagination
+ * 
+ * IMPORTANT: This is the ONLY way to browse all models on Replicate.
+ * One API call does NOT return all models - you must paginate.
+ * 
+ * @param cursor - Opaque cursor from previous response's `next` field
+ * @param sortBy - Sort field: 'model_created_at' or 'latest_version_created_at' (default)
+ * @param sortDirection - 'asc' or 'desc' (default)
  */
-export async function listModels(cursor?: string): Promise<ModelListResponse> {
+export async function listModels(
+  cursor?: string,
+  sortBy?: 'model_created_at' | 'latest_version_created_at',
+  sortDirection?: 'asc' | 'desc'
+): Promise<ModelListResponse> {
   const url = new URL(`${REPLICATE_API_BASE}/models`);
   if (cursor) {
     url.searchParams.set('cursor', cursor);
+  }
+  if (sortBy) {
+    url.searchParams.set('sort_by', sortBy);
+  }
+  if (sortDirection) {
+    url.searchParams.set('sort_direction', sortDirection);
   }
   return fetchWithRetry<ModelListResponse>(url.toString());
 }
@@ -168,15 +177,127 @@ export async function getModelVersion(
 }
 
 /**
- * Search models by query
- * Note: Replicate doesn't have a direct search API, so we fetch and filter locally
- * For production, you'd want to implement server-side caching
+ * ============================================================================
+ * REPLICATE API SEARCH LIMITATIONS (Important to understand)
+ * ============================================================================
+ * 
+ * The Replicate API has TWO different ways to discover models:
+ * 
+ * 1. GET /v1/models - List all public models
+ *    - Returns ~100 models per page (cursor-paginated)
+ *    - No search/filter capability - returns ALL models
+ *    - Use `cursor` param to paginate through thousands of models
+ *    - Can sort by `sort_by` (model_created_at, latest_version_created_at)
+ *    - Use for: "Browse All Models" with infinite scroll
+ * 
+ * 2. QUERY /v1/models - Search public models (uses HTTP QUERY method)
+ *    - Returns models matching a text query
+ *    - Limited to 1-50 results (default 20)
+ *    - NO cursor pagination - single page of results
+ *    - Use for: Quick search by owner/name
+ * 
+ * 3. GET /v1/search - Universal search (beta)
+ *    - Searches models, collections, and docs
+ *    - Limited to 1-50 model results
+ *    - Returns enhanced metadata (tags, AI-generated descriptions)
+ *    - Use for: Rich search experience
+ * 
+ * RATE LIMITS:
+ * - Replicate has undisclosed rate limits
+ * - We implement retry logic with backoff
+ * - Avoid rapid sequential calls when paginating
+ * 
+ * ============================================================================
  */
-export async function searchModels(query: string): Promise<Model[]> {
+
+/**
+ * Search models using Replicate's native QUERY API
+ * 
+ * IMPORTANT: This uses the HTTP QUERY method (not GET or POST)
+ * The query is sent as plain text in the request body.
+ * 
+ * Limitations:
+ * - Maximum 50 results per call
+ * - No cursor pagination for search results
+ * - For browsing all models, use listModels() with cursor pagination instead
+ * 
+ * @param query - Search term (matches owner, name, description)
+ * @param limit - Max results (1-50, default 20)
+ */
+export async function searchModelsAPI(
+  query: string,
+  limit: number = 20
+): Promise<ModelListResponse> {
+  const token = getReplicateToken();
+
+  // Validate limit
+  const validLimit = Math.min(50, Math.max(1, limit));
+
+  const url = new URL(`${REPLICATE_API_BASE}/models`);
+  url.searchParams.set('limit', validLimit.toString());
+
+  // QUERY method with plain text body
+  const response = await fetch(url.toString(), {
+    method: 'QUERY',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'text/plain',
+    },
+    body: query,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new ReplicateError(
+      `Search failed: ${errorBody || response.statusText}`,
+      response.status
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Search models using the universal search API (beta)
+ * 
+ * This endpoint provides richer results with AI-generated descriptions
+ * and relevance scoring, but is marked as beta and may change.
+ * 
+ * @param query - Search query string
+ * @param limit - Max results (1-50, default 20)
+ */
+export async function universalSearch(
+  query: string,
+  limit: number = 20
+): Promise<{
+  models: Array<Model & {
+    metadata?: {
+      generated_description?: string;
+      tags?: string[];
+      score?: number;
+    };
+  }>;
+  collections?: Array<{ name: string; slug: string; description: string }>;
+}> {
+  const validLimit = Math.min(50, Math.max(1, limit));
+  const url = new URL(`${REPLICATE_API_BASE}/search`);
+  url.searchParams.set('query', query);
+  url.searchParams.set('limit', validLimit.toString());
+
+  return fetchWithRetry(url.toString());
+}
+
+/**
+ * Legacy local search (fallback when API search fails)
+ * 
+ * Note: This only searches models from a single page of results.
+ * For comprehensive search, use searchModelsAPI() instead.
+ */
+export async function searchModelsLocal(query: string): Promise<Model[]> {
   const response = await listModels();
   const lowerQuery = query.toLowerCase();
-  
-  return response.results.filter(model => 
+
+  return response.results.filter(model =>
     model.name.toLowerCase().includes(lowerQuery) ||
     model.owner.toLowerCase().includes(lowerQuery) ||
     model.description?.toLowerCase().includes(lowerQuery)

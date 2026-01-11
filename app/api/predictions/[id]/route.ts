@@ -10,6 +10,12 @@ import {
   updateStoredPrediction,
   deleteStoredPrediction,
 } from '@/lib/store';
+import {
+  isReplicateConfigured,
+  REPLICATE_TOKEN_ERROR,
+  ERROR_CODE_MISSING_TOKEN,
+  ConfigurationError
+} from '@/lib/config';
 
 interface RouteParams {
   params: Promise<{
@@ -22,14 +28,33 @@ interface RouteParams {
  * 
  * Fetches the current status of a prediction
  * The ID can be either a Replicate prediction ID or a local ID
+ * 
+ * Error Handling:
+ * - Returns 500 with code 'MISSING_API_TOKEN' if Replicate token is not configured
+ * - Returns appropriate status codes for Replicate API errors
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    // =========================================================================
+    // CONFIGURATION CHECK - Fail fast if API token is not configured
+    // =========================================================================
+    if (!isReplicateConfigured()) {
+      console.error('[API /predictions/[id] GET] Configuration error: ' + REPLICATE_TOKEN_ERROR);
+      return NextResponse.json(
+        {
+          error: REPLICATE_TOKEN_ERROR,
+          code: ERROR_CODE_MISSING_TOKEN,
+          hint: 'Check /api/health for setup instructions',
+        },
+        { status: 500 }
+      );
+    }
+
     const { id } = await params;
 
     // First, check if this is a local ID
     let stored = getStoredPrediction(id);
-    
+
     // If not found by local ID, try Replicate ID
     if (!stored) {
       stored = getStoredPredictionByReplicateId(id);
@@ -56,17 +81,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       localId: stored?.localId,
     });
   } catch (error) {
-    console.error('Error fetching prediction:', error);
+    console.error('[API /predictions/[id] GET] Error:', error);
+
+    if (error instanceof ConfigurationError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: error.code,
+          hint: 'Check /api/health for setup instructions',
+        },
+        { status: 500 }
+      );
+    }
 
     if (error instanceof ReplicateError) {
       return NextResponse.json(
-        { error: error.message },
+        {
+          error: error.message,
+          code: 'REPLICATE_API_ERROR',
+        },
         { status: error.status }
       );
     }
 
     return NextResponse.json(
-      { error: 'Failed to fetch prediction' },
+      {
+        error: 'Failed to fetch prediction. Please try again later.',
+        code: 'UNKNOWN_ERROR',
+      },
       { status: 500 }
     );
   }
@@ -77,9 +119,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * 
  * Actions on a prediction:
  * - ?action=cancel - Cancel a running prediction
+ * 
+ * Error Handling:
+ * - Returns 500 with code 'MISSING_API_TOKEN' if Replicate token is not configured
+ * - Returns appropriate status codes for Replicate API errors
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    // =========================================================================
+    // CONFIGURATION CHECK - Fail fast if API token is not configured
+    // =========================================================================
+    if (!isReplicateConfigured()) {
+      console.error('[API /predictions/[id] POST] Configuration error: ' + REPLICATE_TOKEN_ERROR);
+      return NextResponse.json(
+        {
+          error: REPLICATE_TOKEN_ERROR,
+          code: ERROR_CODE_MISSING_TOKEN,
+          hint: 'Check /api/health for setup instructions',
+        },
+        { status: 500 }
+      );
+    }
+
     const { id } = await params;
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
@@ -90,7 +151,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (!stored) {
         stored = getStoredPredictionByReplicateId(id);
       }
-      
+
       const replicateId = stored?.id || id;
       const prediction = await cancelPrediction(replicateId);
 
@@ -105,21 +166,41 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json(
-      { error: 'Unknown action' },
+      {
+        error: 'Unknown action',
+        code: 'INVALID_ACTION',
+      },
       { status: 400 }
     );
   } catch (error) {
-    console.error('Error processing prediction action:', error);
+    console.error('[API /predictions/[id] POST] Error:', error);
+
+    if (error instanceof ConfigurationError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: error.code,
+          hint: 'Check /api/health for setup instructions',
+        },
+        { status: 500 }
+      );
+    }
 
     if (error instanceof ReplicateError) {
       return NextResponse.json(
-        { error: error.message },
+        {
+          error: error.message,
+          code: 'REPLICATE_API_ERROR',
+        },
         { status: error.status }
       );
     }
 
     return NextResponse.json(
-      { error: 'Failed to process action' },
+      {
+        error: 'Failed to process action. Please try again later.',
+        code: 'UNKNOWN_ERROR',
+      },
       { status: 500 }
     );
   }
@@ -129,6 +210,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  * DELETE /api/predictions/[id]
  * 
  * Deletes a prediction from local storage
+ * This does NOT require Replicate API token as it only affects local storage.
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
@@ -136,7 +218,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Try to delete by local ID first, then by Replicate ID
     let deleted = deleteStoredPrediction(id);
-    
+
     if (!deleted) {
       const stored = getStoredPredictionByReplicateId(id);
       if (stored) {
@@ -146,9 +228,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: deleted });
   } catch (error) {
-    console.error('Error deleting prediction:', error);
+    console.error('[API /predictions/[id] DELETE] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to delete prediction' },
+      {
+        error: 'Failed to delete prediction',
+        code: 'UNKNOWN_ERROR',
+      },
       { status: 500 }
     );
   }

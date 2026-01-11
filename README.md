@@ -40,7 +40,9 @@ A production-ready web application for browsing and running AI models via the Re
 - **API**: Replicate API
 - **Deployment**: Vercel-compatible
 
-## Getting Started
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
@@ -50,40 +52,101 @@ A production-ready web application for browsing and running AI models via the Re
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd replicate-clone
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd replicate-clone
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Set up your API token** (see detailed instructions below)
+
+4. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 🔑 Environment Setup (IMPORTANT)
+
+### Getting Your Replicate API Token
+
+1. Go to [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)
+2. Sign in or create an account
+3. Click "Create token" and copy it
+
+### Setting Up the Token
+
+> ⚠️ **IMPORTANT**: The `.env.example` file is a **template only**. Never put your real token there - it's committed to git!
+
+#### Windows (Command Prompt)
+```cmd
+copy .env.example .env.local
+notepad .env.local
 ```
 
-2. Install dependencies:
-```bash
-npm install
+#### Windows (PowerShell)
+```powershell
+Copy-Item .env.example .env.local
+notepad .env.local
 ```
 
-3. Set up environment variables:
+#### Mac / Linux
 ```bash
 cp .env.example .env.local
+nano .env.local    # or: code .env.local
 ```
 
-4. Add your Replicate API token to `.env.local`:
+Then replace `your_token_here` with your actual token:
 ```
-REPLICATE_API_TOKEN=r8_your_token_here
-```
-
-5. Start the development server:
-```bash
-npm run dev
+REPLICATE_API_TOKEN=r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser.
+### ⚠️ Hidden Files Warning
 
-### Production Build
+Many code editors **hide dotfiles by default**. If you can't see `.env.local`:
 
-```bash
-npm run build
-npm start
+- **VS Code**: Check Settings → `files.exclude` 
+- **File Explorer (Windows)**: View → Show → Hidden items
+- **Finder (Mac)**: Press `Cmd + Shift + .` to toggle hidden files
+- **Terminal**: Use `ls -la` (Mac/Linux) or `dir /a` (Windows)
+
+### Verifying Configuration
+
+You can check if your token is configured by visiting:
 ```
+http://localhost:3000/api/health
+```
+
+This will return:
+```json
+{
+  "status": "healthy",
+  "replicateConfigured": true,
+  "timestamp": "..."
+}
+```
+
+If not configured, it will show setup instructions.
+
+---
+
+## 📁 Environment Variables Reference
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `REPLICATE_API_TOKEN` | Your Replicate API token | Yes |
+| `REPLICATE_API_KEY` | Alternative name (fallback) | No |
+| `NEXT_PUBLIC_BASE_URL` | Base URL for production | No |
+
+---
 
 ## Project Structure
 
@@ -91,6 +154,7 @@ npm start
 ├── app/                      # Next.js App Router
 │   ├── api/                  # API routes
 │   │   ├── collections/      # Collections endpoint
+│   │   ├── health/           # Health check endpoint
 │   │   ├── models/           # Models endpoints
 │   │   └── predictions/      # Predictions endpoints
 │   ├── models/[owner]/[name] # Model detail page
@@ -101,28 +165,12 @@ npm start
 │
 ├── components/               # React components
 │   ├── layout/               # Layout components
-│   │   └── header.tsx        # Site header
 │   ├── models/               # Model-related components
-│   │   ├── model-card.tsx    # Model card (grid/list)
-│   │   ├── model-filters.tsx # Search and filters
-│   │   └── model-grid.tsx    # Model grid/list view
 │   ├── predictions/          # Prediction components
-│   │   ├── prediction-form.tsx   # Dynamic input form
-│   │   ├── prediction-list.tsx   # History list
-│   │   └── prediction-output.tsx # Output display
 │   └── ui/                   # Base UI components
-│       ├── badge.tsx         # Badge component
-│       ├── button.tsx        # Button component
-│       ├── card.tsx          # Card component
-│       ├── file-upload.tsx   # File upload component
-│       ├── input.tsx         # Input component
-│       ├── select.tsx        # Select component
-│       ├── skeleton.tsx      # Loading skeletons
-│       ├── slider.tsx        # Slider component
-│       ├── switch.tsx        # Toggle switch
-│       └── textarea.tsx      # Textarea component
 │
 ├── lib/                      # Utility libraries
+│   ├── config.ts             # Centralized configuration
 │   ├── replicate.ts          # Replicate API client
 │   ├── schema-parser.ts      # Schema to form parser
 │   ├── store.ts              # In-memory prediction store
@@ -135,6 +183,9 @@ npm start
 ```
 
 ## API Routes
+
+### Health Check
+- `GET /api/health` - Check API configuration status
 
 ### Models
 
@@ -171,6 +222,43 @@ npm start
 ### Collections
 
 - `GET /api/collections` - List available collections
+
+---
+
+## 🔧 Troubleshooting
+
+### "Missing Replicate API token" Error
+
+**Cause**: The `.env.local` file is missing or doesn't contain a valid token.
+
+**Fix**:
+1. Make sure `.env.local` exists in the project root
+2. Verify it contains `REPLICATE_API_TOKEN=r8_...`
+3. Restart the development server after changing env files
+
+### "Failed to fetch models" Error
+
+**Cause**: Could be a network issue or invalid token.
+
+**Fix**:
+1. Check `/api/health` to see if the token is configured
+2. Verify your token is valid at [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)
+3. Check the terminal/console for detailed error messages
+
+### Can't See .env.local in Editor
+
+**Cause**: Your editor hides dotfiles by default.
+
+**Fix**: See "Hidden Files Warning" section above.
+
+---
+
+## Production Build
+
+```bash
+npm run build
+npm start
+```
 
 ## Configuration
 
