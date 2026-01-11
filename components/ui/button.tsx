@@ -4,8 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive';
   size?: 'sm' | 'md' | 'lg' | 'icon';
   loading?: boolean;
@@ -13,14 +12,14 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'md', loading, disabled, children, ...props }, ref) => {
-    const baseStyles = 'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 rounded-lg';
-    
+    const base = 'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:pointer-events-none disabled:opacity-50 rounded-lg';
+
     const variants = {
-      default: 'bg-white text-black hover:bg-gray-200 focus-visible:ring-white',
-      secondary: 'bg-gray-800 text-white hover:bg-gray-700 focus-visible:ring-gray-500',
-      outline: 'border border-gray-700 bg-transparent hover:bg-gray-800 text-white focus-visible:ring-gray-500',
-      ghost: 'hover:bg-gray-800 text-white focus-visible:ring-gray-500',
-      destructive: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
+      default: 'bg-white text-[#0a0a0a] hover:bg-[#e5e5e5]',
+      secondary: 'bg-[#262626] text-white hover:bg-[#333]',
+      outline: 'border border-[#333] bg-transparent hover:bg-[#1a1a1a] text-[#e5e5e5]',
+      ghost: 'hover:bg-[#1a1a1a] text-[#a3a3a3] hover:text-white',
+      destructive: 'bg-red-600 text-white hover:bg-red-700',
     };
 
     const sizes = {
@@ -32,7 +31,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     return (
       <button
-        className={cn(baseStyles, variants[variant], sizes[size], className)}
+        className={cn(base, variants[variant], sizes[size], className)}
         ref={ref}
         disabled={disabled || loading}
         {...props}

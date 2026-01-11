@@ -4,10 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { StoredPrediction } from '@/types';
 import { PredictionList } from '@/components/predictions/prediction-list';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trash2, RefreshCw, History } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 
 export default function PredictionsPage() {
   const router = useRouter();
@@ -15,22 +13,18 @@ export default function PredictionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch predictions
   const fetchPredictions = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
       const response = await fetch('/api/predictions?local=true');
-      if (!response.ok) {
-        throw new Error('Failed to fetch predictions');
-      }
+      if (!response.ok) throw new Error('Failed to fetch predictions');
 
       const data = await response.json();
       setPredictions(data.results || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load predictions');
-      console.error('Error fetching predictions:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setIsLoading(false);
     }
@@ -40,141 +34,103 @@ export default function PredictionsPage() {
     fetchPredictions();
   }, [fetchPredictions]);
 
-  // Delete a prediction
   const handleDelete = useCallback(async (localId: string) => {
     try {
-      const response = await fetch(`/api/predictions/${localId}`, {
-        method: 'DELETE',
-      });
-
+      const response = await fetch(`/api/predictions/${localId}`, { method: 'DELETE' });
       if (response.ok) {
         setPredictions((prev) => prev.filter((p) => p.localId !== localId));
       }
     } catch (err) {
-      console.error('Error deleting prediction:', err);
+      console.error('Delete error:', err);
     }
   }, []);
 
-  // Clear all predictions
   const handleClearAll = useCallback(async () => {
-    if (!confirm('Are you sure you want to clear all predictions?')) {
-      return;
-    }
-
+    if (!confirm('Clear all predictions?')) return;
     try {
-      const response = await fetch('/api/predictions', {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setPredictions([]);
-      }
+      const response = await fetch('/api/predictions', { method: 'DELETE' });
+      if (response.ok) setPredictions([]);
     } catch (err) {
-      console.error('Error clearing predictions:', err);
+      console.error('Clear all error:', err);
     }
   }, []);
 
-  // Rerun a prediction
-  const handleRerun = useCallback(
-    (prediction: StoredPrediction) => {
-      router.push(
-        `/models/${prediction.modelOwner}/${prediction.modelName}?clone=${prediction.localId}`
-      );
-    },
-    [router]
-  );
+  const handleRerun = useCallback((prediction: StoredPrediction) => {
+    router.push(`/models/${prediction.modelOwner}/${prediction.modelName}?clone=${prediction.localId}`);
+  }, [router]);
+
+  // Stats
+  const stats = {
+    total: predictions.length,
+    succeeded: predictions.filter((p) => p.status === 'succeeded').length,
+    failed: predictions.filter((p) => p.status === 'failed').length,
+    models: new Set(predictions.map((p) => `${p.modelOwner}/${p.modelName}`)).size,
+  };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-6 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-10">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <History className="h-8 w-8" />
-            Prediction History
-          </h1>
-          <p className="text-gray-400 mt-2">
-            View and manage your past model runs
-          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">History</h1>
+          <p className="text-[#737373] mt-1">Your past model runs</p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+          <button
             onClick={fetchPredictions}
             disabled={isLoading}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-[#737373] hover:text-white transition-colors"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
           {predictions.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={handleClearAll}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-[#737373] hover:text-red-400 transition-colors"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Clear All
-            </Button>
+              <Trash2 className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
 
       {/* Stats */}
       {predictions.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            label="Total Runs"
-            value={predictions.length}
-          />
-          <StatCard
-            label="Succeeded"
-            value={predictions.filter((p) => p.status === 'succeeded').length}
-            color="text-green-500"
-          />
-          <StatCard
-            label="Failed"
-            value={predictions.filter((p) => p.status === 'failed').length}
-            color="text-red-500"
-          />
-          <StatCard
-            label="Unique Models"
-            value={new Set(predictions.map((p) => `${p.modelOwner}/${p.modelName}`)).size}
-          />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+          <StatCard label="Total" value={stats.total} />
+          <StatCard label="Succeeded" value={stats.succeeded} color="text-green-400" />
+          <StatCard label="Failed" value={stats.failed} color="text-red-400" />
+          <StatCard label="Models" value={stats.models} />
         </div>
       )}
 
-      {/* Error State */}
+      {/* Error */}
       {error && (
-        <div className="text-center py-12">
-          <div className="text-5xl mb-4">⚠️</div>
-          <p className="text-red-400 mb-4">{error}</p>
-          <Button onClick={fetchPredictions}>Try again</Button>
+        <div className="text-center py-16">
+          <p className="text-[#737373] mb-4">{error}</p>
+          <button onClick={fetchPredictions} className="text-sm text-[#a3a3a3] hover:text-white">
+            Retry
+          </button>
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading */}
       {isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-4">
-                <div className="flex gap-4">
-                  <Skeleton className="h-20 w-20 rounded-lg" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-5 w-48" />
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-full" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-[#141414] rounded-lg p-4 flex gap-4">
+              <Skeleton className="h-16 w-16 rounded" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Predictions List */}
+      {/* List */}
       {!isLoading && !error && (
         <PredictionList
           predictions={predictions}
@@ -186,22 +142,11 @@ export default function PredictionsPage() {
   );
 }
 
-// Stats card component
-function StatCard({
-  label,
-  value,
-  color = 'text-white',
-}: {
-  label: string;
-  value: number;
-  color?: string;
-}) {
+function StatCard({ label, value, color = 'text-white' }: { label: string; value: number; color?: string }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-sm text-gray-400">{label}</p>
-        <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      </CardContent>
-    </Card>
+    <div className="bg-[#141414] rounded-lg p-4">
+      <p className="text-sm text-[#525252]">{label}</p>
+      <p className={`text-2xl font-semibold ${color}`}>{value}</p>
+    </div>
   );
 }

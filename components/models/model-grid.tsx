@@ -3,7 +3,6 @@
 import { memo } from 'react';
 import { Model, ViewMode } from '@/types';
 import { ModelCard } from './model-card';
-import { SkeletonModelGrid } from '@/components/ui/skeleton';
 
 interface ModelGridProps {
   models: Model[];
@@ -13,7 +12,7 @@ interface ModelGridProps {
 }
 
 /**
- * Model grid/list container - memoized to prevent re-renders
+ * Model grid - responsive, Netflix-style layout
  */
 export const ModelGrid = memo(function ModelGrid({
   models,
@@ -22,21 +21,21 @@ export const ModelGrid = memo(function ModelGrid({
   emptyMessage = 'No models found',
 }: ModelGridProps) {
   if (isLoading) {
-    return <SkeletonModelGrid count={viewMode === 'list' ? 5 : 9} />;
+    return <SkeletonGrid count={viewMode === 'list' ? 6 : 12} viewMode={viewMode} />;
   }
 
   if (models.length === 0) {
     return (
-      <div className="text-center py-16">
-        <div className="text-4xl mb-3 opacity-50">🔍</div>
-        <p className="text-gray-500 text-sm">{emptyMessage}</p>
+      <div className="text-center py-20">
+        <div className="text-4xl mb-4 opacity-30">◇</div>
+        <p className="text-[#737373]">{emptyMessage}</p>
       </div>
     );
   }
 
   if (viewMode === 'list') {
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="divide-y divide-[#1f1f1f]">
         {models.map((model) => (
           <ModelCard
             key={`${model.owner}/${model.name}`}
@@ -49,7 +48,7 @@ export const ModelGrid = memo(function ModelGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       {models.map((model) => (
         <ModelCard
           key={`${model.owner}/${model.name}`}
@@ -60,3 +59,36 @@ export const ModelGrid = memo(function ModelGrid({
     </div>
   );
 });
+
+// Skeleton loader
+function SkeletonGrid({ count, viewMode }: { count: number; viewMode: ViewMode }) {
+  if (viewMode === 'list') {
+    return (
+      <div className="divide-y divide-[#1f1f1f]">
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 px-2 py-3">
+            <div className="h-12 w-20 rounded skeleton" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-32 rounded skeleton" />
+              <div className="h-3 w-24 rounded skeleton" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="rounded-lg overflow-hidden bg-[#141414]">
+          <div className="aspect-video skeleton" />
+          <div className="p-3 space-y-2">
+            <div className="h-4 w-3/4 rounded skeleton" />
+            <div className="h-3 w-1/2 rounded skeleton" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

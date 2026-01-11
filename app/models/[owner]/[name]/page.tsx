@@ -1,25 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import React, { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Model, ModelVersion, Prediction, JSONSchema, StoredPrediction } from '@/types';
 import { extractInputSchema } from '@/lib/replicate';
 import { PredictionForm } from '@/components/predictions/prediction-form';
 import { PredictionOutput, PredictionLoading } from '@/components/predictions/prediction-output';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Skeleton, SkeletonForm } from '@/components/ui/skeleton';
 import { formatNumber, formatRelativeTime } from '@/lib/utils';
-import {
-  ArrowLeft,
-  Github,
-  ExternalLink,
-  Play,
-  User,
-  Clock,
-  Hash,
-} from 'lucide-react';
+import { ArrowLeft, ExternalLink, Play } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{
@@ -34,7 +24,6 @@ export default function ModelDetailPage({ params }: PageProps) {
   const cloneId = searchParams.get('clone');
 
   const [model, setModel] = useState<Model | null>(null);
-  const [versions, setVersions] = useState<ModelVersion[]>([]);
   const [inputSchema, setInputSchema] = useState<JSONSchema | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +46,6 @@ export default function ModelDetailPage({ params }: PageProps) {
 
         const data = await response.json();
         setModel(data);
-        setVersions(data.versions || []);
 
         if (data.latest_version?.openapi_schema) {
           const schema = extractInputSchema(data.latest_version.openapi_schema);
@@ -65,7 +53,6 @@ export default function ModelDetailPage({ params }: PageProps) {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load model');
-        console.error('Error fetching model:', err);
       } finally {
         setIsLoading(false);
       }
@@ -105,11 +92,7 @@ export default function ModelDetailPage({ params }: PageProps) {
         const response = await fetch('/api/predictions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modelOwner: owner,
-            modelName: name,
-            input,
-          }),
+          body: JSON.stringify({ modelOwner: owner, modelName: name, input }),
         });
 
         if (!response.ok) {
@@ -145,7 +128,6 @@ export default function ModelDetailPage({ params }: PageProps) {
         console.error('Polling error:', err);
       }
     };
-
     poll();
   }, []);
 
@@ -157,28 +139,18 @@ export default function ModelDetailPage({ params }: PageProps) {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
+      <div className="container mx-auto px-6 py-8">
+        <div className="mb-8">
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-32" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-24" />
-            </CardHeader>
-            <CardContent>
-              <SkeletonForm />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-64 w-full" />
-            </CardContent>
-          </Card>
+          <div className="bg-[#141414] rounded-lg p-6">
+            <SkeletonForm />
+          </div>
+          <div className="bg-[#141414] rounded-lg p-6">
+            <Skeleton className="h-64 w-full" />
+          </div>
         </div>
       </div>
     );
@@ -186,17 +158,16 @@ export default function ModelDetailPage({ params }: PageProps) {
 
   if (error && !model) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Link href="/" className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6">
+      <div className="container mx-auto px-6 py-8">
+        <Link href="/" className="inline-flex items-center gap-2 text-[#737373] hover:text-white mb-8">
           <ArrowLeft className="h-4 w-4" />
-          Back to models
+          Back
         </Link>
-        <div className="text-center py-12">
-          <div className="text-5xl mb-4">❌</div>
-          <h1 className="text-2xl font-bold mb-2">Model Not Found</h1>
-          <p className="text-gray-400 mb-4">{error}</p>
-          <Link href="/">
-            <Button>Browse Models</Button>
+        <div className="text-center py-16">
+          <h1 className="text-2xl font-semibold mb-2">Model not found</h1>
+          <p className="text-[#737373] mb-6">{error}</p>
+          <Link href="/" className="text-sm text-[#a3a3a3] hover:text-white">
+            Browse models →
           </Link>
         </div>
       </div>
@@ -204,133 +175,103 @@ export default function ModelDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
-      >
+    <div className="container mx-auto px-6 py-8">
+      {/* Back link */}
+      <Link href="/" className="inline-flex items-center gap-2 text-[#737373] hover:text-white mb-8 transition-colors">
         <ArrowLeft className="h-4 w-4" />
-        Back to models
+        Back
       </Link>
 
-      <div className="mb-8">
+      {/* Header */}
+      <div className="mb-10">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold mb-2">{model?.name}</h1>
-            <div className="flex items-center gap-3 text-gray-400">
-              <Link
-                href={`https://replicate.com/${owner}`}
-                target="_blank"
-                className="flex items-center gap-1 hover:text-white transition-colors"
-              >
-                <User className="h-4 w-4" />
-                {owner}
-              </Link>
+            <h1 className="text-3xl font-semibold tracking-tight text-white mb-1">
+              {model?.name}
+            </h1>
+            <div className="flex items-center gap-4 text-[#737373]">
+              <span>{owner}</span>
               {model?.run_count && (
-                <span className="flex items-center gap-1">
-                  <Play className="h-4 w-4" />
+                <span className="flex items-center gap-1 text-sm">
+                  <Play className="h-3 w-3" />
                   {formatNumber(model.run_count)} runs
                 </span>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {model?.github_url && (
-              <a href={model.github_url} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm">
-                  <Github className="h-4 w-4 mr-2" />
-                  GitHub
-                </Button>
-              </a>
-            )}
-            <a
-              href={`https://replicate.com/${owner}/${name}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Replicate
-              </Button>
-            </a>
-          </div>
+          <a
+            href={`https://replicate.com/${owner}/${name}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-[#737373] hover:text-white transition-colors"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Replicate
+          </a>
         </div>
 
         {model?.description && (
-          <p className="text-gray-400 mt-4 max-w-3xl">{model.description}</p>
+          <p className="text-[#a3a3a3] mt-4 max-w-2xl leading-relaxed">
+            {model.description}
+          </p>
         )}
 
         {model?.latest_version && (
-          <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
-            <span className="flex items-center gap-1">
-              <Hash className="h-3 w-3" />
-              {model.latest_version.id.slice(0, 12)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {formatRelativeTime(model.latest_version.created_at)}
-            </span>
-          </div>
+          <p className="text-sm text-[#525252] mt-3">
+            Updated {formatRelativeTime(model.latest_version.created_at)}
+          </p>
         )}
       </div>
 
+      {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Input</CardTitle>
-            <CardDescription>Configure the model parameters and run</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PredictionForm
-              schema={inputSchema}
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-              initialValues={initialValues}
-            />
-          </CardContent>
-        </Card>
+        {/* Input */}
+        <div className="bg-[#141414] rounded-lg p-6">
+          <h2 className="text-lg font-medium text-white mb-1">Input</h2>
+          <p className="text-sm text-[#525252] mb-6">Configure parameters and run</p>
+          <PredictionForm
+            schema={inputSchema}
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+            initialValues={initialValues}
+          />
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Output</CardTitle>
-            <CardDescription>
-              {prediction ? `Prediction ${prediction.id.slice(0, 8)}` : 'Run the model to see results'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {prediction ? (
-              prediction.status === 'starting' || prediction.status === 'processing' ? (
-                <PredictionLoading status={prediction.status} />
-              ) : (
-                <PredictionOutput prediction={prediction} onRerun={handleRerun} />
-              )
+        {/* Output */}
+        <div className="bg-[#141414] rounded-lg p-6">
+          <h2 className="text-lg font-medium text-white mb-1">Output</h2>
+          <p className="text-sm text-[#525252] mb-6">
+            {prediction ? `ID: ${prediction.id.slice(0, 8)}` : 'Run the model to see results'}
+          </p>
+
+          {prediction ? (
+            prediction.status === 'starting' || prediction.status === 'processing' ? (
+              <PredictionLoading status={prediction.status} />
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <div className="text-5xl mb-4">🎯</div>
-                <p>Configure your inputs and click "Run Model"</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              <PredictionOutput prediction={prediction} onRerun={handleRerun} />
+            )
+          ) : (
+            <div className="text-center py-16 text-[#525252]">
+              <div className="text-4xl mb-4 opacity-30">◇</div>
+              <p className="text-sm">Configure inputs and run</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      { model?.default_example?.output !== undefined && model?.default_example?.output !== null && !prediction && (
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>Example Output</CardTitle>
-            <CardDescription>Sample output from this model</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ExampleOutput output={model.default_example.output} />
-          </CardContent>
-        </Card>
+      {/* Example output */}
+      {model?.default_example?.output && !prediction && (
+        <div className="mt-10 bg-[#141414] rounded-lg p-6">
+          <h2 className="text-lg font-medium text-white mb-4">Example Output</h2>
+          <ExampleOutput output={model.default_example.output} />
+        </div>
       )}
     </div>
   );
 }
 
-function ExampleOutput({ output }: { output: unknown }) {
+function ExampleOutput({ output }: { output: unknown }): React.ReactNode {
   if (!output) return null;
 
   if (Array.isArray(output)) {
@@ -346,14 +287,15 @@ function ExampleOutput({ output }: { output: unknown }) {
   return <ExampleOutputItem value={output} />;
 }
 
-function ExampleOutputItem({ value }: { value: unknown }) {
+function ExampleOutputItem({ value }: { value: unknown }): React.ReactNode {
   if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:'))) {
-    return <img src={value} alt="Example output" className="rounded-lg w-full" />;
+    return <img src={value} alt="" className="rounded-lg w-full" />;
   }
 
   return (
-    <pre className="text-xs text-gray-400 overflow-auto max-h-32">
+    <pre className="text-xs text-[#525252] overflow-auto max-h-32">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
 }
+

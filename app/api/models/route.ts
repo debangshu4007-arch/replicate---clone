@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listModels, getCollection, ReplicateError } from '@/lib/replicate';
+import { rankModels } from '@/lib/ranking';
 import {
   isReplicateConfigured,
   REPLICATE_TOKEN_ERROR,
@@ -10,22 +11,17 @@ import {
 /**
  * GET /api/models
  * 
- * Fetches models from Replicate API with proper cursor-based pagination.
+ * Fetches and ranks models from Replicate API.
  * 
  * Query params:
- * - cursor: Pagination cursor (MUST be valid non-empty string or omitted entirely)
- * - collection: Collection slug to fetch from
- * - featured: Sort by run_count (popularity)
+ * - cursor: Pagination cursor
+ * - collection: Collection slug
+ * - featured: Apply ranking (default: true for first page)
  * - sort_by: 'model_created_at' | 'latest_version_created_at'
  * - sort_direction: 'asc' | 'desc'
- * 
- * CURSOR RULES:
- * 1. If cursor param is empty/null, we MUST NOT pass it to Replicate
- * 2. Invalid cursors return 400, not 500
  */
 export async function GET(request: NextRequest) {
   try {
-    // Config check
     if (!isReplicateConfigured()) {
       return NextResponse.json({
         error: REPLICATE_TOKEN_ERROR,
@@ -38,11 +34,8 @@ export async function GET(request: NextRequest) {
     const collection = searchParams.get('collection');
     const featured = searchParams.get('featured') === 'true';
 
-    // CRITICAL: Validate cursor - only use if non-empty string
     const rawCursor = searchParams.get('cursor');
-    const cursor = rawCursor && typeof rawCursor === 'string' && rawCursor.trim().length > 0
-      ? rawCursor.trim()
-      : undefined;
+    const cursor = rawCursor?.trim() || undefined;
 
     const sortBy = searchParams.get('sort_by') as 'model_created_at' | 'latest_version_created_at' | undefined;
     const sortDirection = searchParams.get('sort_direction') as 'asc' | 'desc' | undefined;
@@ -51,33 +44,31 @@ export async function GET(request: NextRequest) {
     if (collection) {
       try {
         const collectionData = await getCollection(collection);
+        // Rank collection models too
+        const ranked = rankModels(collectionData.models || []);
         return NextResponse.json({
-          results: collectionData.models,
-          next: null, // Collections don't paginate
+          results: ranked,
+          next: null,
           collection: {
             name: collectionData.name,
             description: collectionData.description,
           },
         });
       } catch {
-        console.warn(`[/api/models] Collection "${collection}" not found, falling back to list`);
+        console.warn(`[/api/models] Collection "${collection}" not found`);
       }
     }
 
-    // Fetch models - cursor is either valid string or undefined (never empty)
+    // Fetch models
     const response = await listModels(cursor, sortBy, sortDirection);
-
     let models = response.results || [];
 
-    // Client-side sort by popularity if requested and no API sort
-    if (featured && !sortBy) {
-      models = [...models].sort((a, b) => (b.run_count || 0) - (a.run_count || 0));
+    // Apply ranking for featured/first page (no cursor)
+    if (featured || !cursor) {
+      models = rankModels(models);
     }
 
-    // Validate next cursor before returning
-    const nextCursor = response.next && typeof response.next === 'string' && response.next.trim().length > 0
-      ? response.next
-      : null;
+    const nextCursor = response.next?.trim() || null;
 
     return NextResponse.json({
       results: models,
@@ -96,7 +87,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (error instanceof ReplicateError) {
-      // Check for cursor-specific errors
       const isCursorError = error.message.toLowerCase().includes('cursor');
       return NextResponse.json({
         error: isCursorError ? 'Invalid pagination cursor' : error.message,

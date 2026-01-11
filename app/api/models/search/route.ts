@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchModelsAPI, universalSearch, ReplicateError } from '@/lib/replicate';
+import { rankModels } from '@/lib/ranking';
 import {
     isReplicateConfigured,
     REPLICATE_TOKEN_ERROR,
@@ -87,29 +88,21 @@ export async function GET(request: NextRequest) {
         if (useEnhanced) {
             // Use universal search for richer metadata
             const searchResult = await universalSearch(query.trim(), validLimit);
+            const rankedResults = rankModels(searchResult.models || []);
             return NextResponse.json({
-                results: searchResult.models || [],
+                results: rankedResults,
                 query: query.trim(),
                 limit: validLimit,
                 enhanced: true,
-                // Note: No 'next' cursor - search results are not paginated
-                _meta: {
-                    searchMethod: 'universal_search',
-                    note: 'Search results limited to 50 max. Use /api/models?cursor=X for full browsing.',
-                },
             });
         } else {
             // Use QUERY method for standard search
             const response = await searchModelsAPI(query.trim(), validLimit);
+            const rankedResults = rankModels(response.results || []);
             return NextResponse.json({
-                results: response.results,
+                results: rankedResults,
                 query: query.trim(),
                 limit: validLimit,
-                // Note: No 'next' cursor - search results are not paginated in Replicate API
-                _meta: {
-                    searchMethod: 'query_models',
-                    note: 'Search results limited to 50 max. Use /api/models?cursor=X for full browsing.',
-                },
             });
         }
     } catch (error) {

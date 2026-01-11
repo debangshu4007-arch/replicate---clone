@@ -3,48 +3,41 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Boxes, History, Sparkles } from 'lucide-react';
 
 const navItems = [
-  { href: '/', label: 'Models', icon: Boxes },
-  { href: '/predictions', label: 'History', icon: History },
+  { href: '/', label: 'Explore' },
+  { href: '/predictions', label: 'History' },
 ];
 
 export function Header() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-800 bg-black/80 backdrop-blur-lg">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              ModelHub
-            </span>
+    <header className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-[#1f1f1f]">
+      <div className="container mx-auto px-6">
+        <div className="flex h-14 items-center justify-between">
+          {/* Logo - simple, confident */}
+          <Link href="/" className="text-xl font-semibold tracking-tight text-white">
+            ModelHub
           </Link>
 
-          {/* Navigation */}
-          <nav className="flex items-center gap-1">
+          {/* Navigation - minimal */}
+          <nav className="flex items-center gap-6">
             {navItems.map((item) => {
-              const isActive = pathname === item.href || 
+              const isActive = pathname === item.href ||
                 (item.href !== '/' && pathname.startsWith(item.href));
-              
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-gray-800 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      ? 'text-white'
+                      : 'text-[#a3a3a3] hover:text-white'
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
                   {item.label}
                 </Link>
               );

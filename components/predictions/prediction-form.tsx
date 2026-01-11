@@ -29,19 +29,19 @@ export function PredictionForm({
 }: PredictionFormProps) {
   const fields = useMemo(() => parseInputSchema(schema), [schema]);
   const defaults = useMemo(() => getSchemaDefaults(schema), [schema]);
-  
+
   const [values, setValues] = useState<Record<string, unknown>>(() => ({
     ...defaults,
     ...initialValues,
   }));
-  
+
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Separate required and optional fields
   const { requiredFields, optionalFields } = useMemo(() => {
     const required: FormField[] = [];
     const optional: FormField[] = [];
-    
+
     fields.forEach((field) => {
       if (field.required) {
         required.push(field);
@@ -49,7 +49,7 @@ export function PredictionForm({
         optional.push(field);
       }
     });
-    
+
     return { requiredFields: required, optionalFields: optional };
   }, [fields]);
 
@@ -64,7 +64,7 @@ export function PredictionForm({
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      
+
       // Filter out empty/undefined values
       const input: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(values)) {
@@ -72,7 +72,7 @@ export function PredictionForm({
           input[key] = value;
         }
       }
-      
+
       onSubmit(input);
     },
     [values, onSubmit]
@@ -80,7 +80,7 @@ export function PredictionForm({
 
   if (!schema || fields.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-[#525252]">
         <p>No input schema available for this model.</p>
         <p className="text-sm mt-2">This model may not be configured correctly.</p>
       </div>
@@ -101,11 +101,11 @@ export function PredictionForm({
 
       {/* Optional Fields (Collapsible) */}
       {optionalFields.length > 0 && (
-        <div className="border-t border-gray-800 pt-4">
+        <div className="border-t border-[#1f1f1f] pt-4">
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-sm text-[#737373] hover:text-white transition-colors"
           >
             {showAdvanced ? (
               <ChevronUp className="h-4 w-4" />
@@ -114,7 +114,7 @@ export function PredictionForm({
             )}
             {showAdvanced ? 'Hide' : 'Show'} advanced options ({optionalFields.length})
           </button>
-          
+
           {showAdvanced && (
             <div className="mt-4 space-y-6">
               {optionalFields.map((field) => (
@@ -131,7 +131,7 @@ export function PredictionForm({
       )}
 
       {/* Submit Buttons */}
-      <div className="flex items-center gap-3 pt-4 border-t border-gray-800">
+      <div className="flex items-center gap-3 pt-4 border-t border-[#1f1f1f]">
         <Button type="submit" loading={isSubmitting} className="flex-1">
           <Play className="h-4 w-4 mr-2" />
           Run Model

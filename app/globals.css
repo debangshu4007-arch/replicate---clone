@@ -1,35 +1,87 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   PREMIUM DESIGN SYSTEM
+   Inspired by Netflix/Apple TV+ - cinematic, content-first, confident
+   ============================================================================ */
+
 :root {
-  --background: 0 0% 0%;
-  --foreground: 0 0% 100%;
+  /* Core palette - warm charcoal, not pure black */
+  --bg-base: #0a0a0a;
+  --bg-surface: #141414;
+  --bg-elevated: #1a1a1a;
+  --bg-hover: #222222;
+  
+  /* Text - softer contrast */
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  
+  /* Borders - subtle */
+  --border-default: #262626;
+  --border-subtle: #1f1f1f;
+  
+  /* Accent - confident, not neon */
+  --accent: #e50914;
+  --accent-hover: #f40612;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: black;
-  color: white;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - minimal */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #333;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
 
-/* Line clamp utilities */
+/* Focus states - clean white ring */
+*:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(229, 9, 20, 0.3);
+  color: white;
+}
+
+/* Typography utilities */
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Line clamp */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -44,19 +96,55 @@ body {
   overflow: hidden;
 }
 
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(to right, #60a5fa, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* Select styling */
+select option {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
-/* Smooth animations */
+/* Hide file inputs */
+input[type="file"] {
+  display: none;
+}
+
+/* Code blocks */
+pre {
+  background: var(--bg-surface);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+}
+
+/* Card hover lift - cinematic */
+.card-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-lift:hover {
+  transform: scale(1.02) translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+/* Gradient overlay for cards */
+.gradient-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.5) 50%,
+    transparent 100%
+  );
+}
+
+/* Fade in animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -68,42 +156,23 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Pulse animation for loading */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
+/* Skeleton pulse */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
   }
-  50% {
-    opacity: 0.5;
+  100% {
+    background-position: 200% 0;
   }
 }
 
-/* Ensure select options are styled in dark mode */
-select option {
-  background: #111;
-  color: white;
-}
-
-/* Focus visible styles */
-*:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-/* Hide default file input */
-input[type="file"] {
-  display: none;
-}
-
-/* Code blocks */
-pre {
-  background: #111;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  overflow-x: auto;
-}
-
-code {
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 0.875rem;
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 25%,
+    var(--bg-elevated) 50%,
+    var(--bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
