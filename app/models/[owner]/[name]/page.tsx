@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Model, ModelVersion, Prediction, JSONSchema, StoredPrediction } from '@/types';
+import { Model, Prediction, JSONSchema, StoredPrediction } from '@/types';
 import { extractInputSchema } from '@/lib/replicate';
 import { PredictionForm } from '@/components/predictions/prediction-form';
 import { PredictionOutput, PredictionLoading } from '@/components/predictions/prediction-output';
@@ -18,7 +18,7 @@ interface PageProps {
   }>;
 }
 
-export default function ModelDetailPage({ params }: PageProps) {
+export default function ModelDetailPage({ params }: PageProps): React.ReactElement {
   const { owner, name } = use(params);
   const searchParams = useSearchParams();
   const cloneId = searchParams.get('clone');
@@ -68,11 +68,11 @@ export default function ModelDetailPage({ params }: PageProps) {
           const response = await fetch(`/api/predictions?local=true`);
           if (response.ok) {
             const data = await response.json();
-            const prediction = data.results?.find(
+            const pred = data.results?.find(
               (p: StoredPrediction) => p.localId === cloneId
             );
-            if (prediction) {
-              setInitialValues(prediction.input);
+            if (pred) {
+              setInitialValues(pred.input);
             }
           }
         } catch (err) {
@@ -137,6 +137,10 @@ export default function ModelDetailPage({ params }: PageProps) {
     }
   }, [prediction, handleSubmit]);
 
+  // Extract example output as renderable content
+  const exampleOutput = model?.default_example?.output;
+  const hasExampleOutput = exampleOutput !== undefined && exampleOutput !== null;
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-6 py-8">
@@ -174,6 +178,11 @@ export default function ModelDetailPage({ params }: PageProps) {
     );
   }
 
+  const modelName: string = model?.name ?? '';
+  const modelDescription: string = model?.description ?? '';
+  const modelRunCount: number = model?.run_count ?? 0;
+  const latestVersionDate: string = model?.latest_version?.created_at ?? '';
+
   return (
     <div className="container mx-auto px-6 py-8">
       {/* Back link */}
@@ -187,14 +196,14 @@ export default function ModelDetailPage({ params }: PageProps) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-white mb-1">
-              {model?.name}
+              {modelName}
             </h1>
             <div className="flex items-center gap-4 text-[#737373]">
               <span>{owner}</span>
-              {model?.run_count && (
+              {modelRunCount > 0 && (
                 <span className="flex items-center gap-1 text-sm">
                   <Play className="h-3 w-3" />
-                  {formatNumber(model.run_count)} runs
+                  {formatNumber(modelRunCount)} runs
                 </span>
               )}
             </div>
@@ -211,15 +220,15 @@ export default function ModelDetailPage({ params }: PageProps) {
           </a>
         </div>
 
-        {model?.description && (
+        {modelDescription && (
           <p className="text-[#a3a3a3] mt-4 max-w-2xl leading-relaxed">
-            {model.description}
+            {modelDescription}
           </p>
         )}
 
-        {model?.latest_version && (
+        {latestVersionDate && (
           <p className="text-sm text-[#525252] mt-3">
-            Updated {formatRelativeTime(model.latest_version.created_at)}
+            Updated {formatRelativeTime(latestVersionDate)}
           </p>
         )}
       </div>
@@ -261,41 +270,70 @@ export default function ModelDetailPage({ params }: PageProps) {
       </div>
 
       {/* Example output */}
-      {model?.default_example?.output && !prediction && (
+      {hasExampleOutput && !prediction && (
         <div className="mt-10 bg-[#141414] rounded-lg p-6">
           <h2 className="text-lg font-medium text-white mb-4">Example Output</h2>
-          <ExampleOutput output={model.default_example.output} />
+          <ExampleOutputDisplay data={exampleOutput} />
         </div>
       )}
     </div>
   );
 }
 
-function ExampleOutput({ output }: { output: unknown }): React.ReactNode {
-  if (!output) return null;
+/**
+ * Safely renders example output data.
+ * This component takes `unknown` but renders all values as strings.
+ */
+function ExampleOutputDisplay({ data }: { data: unknown }): React.ReactElement | null {
+  if (data === null || data === undefined) {
+    return null;
+  }
 
-  if (Array.isArray(output)) {
+  // Handle array of items
+  if (Array.isArray(data)) {
+    const items = data.slice(0, 4);
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {output.slice(0, 4).map((item, i) => (
-          <ExampleOutputItem key={i} value={item} />
+        {items.map((item, index) => (
+          <ExampleOutputItem key={index} data={item} />
         ))}
       </div>
     );
   }
 
-  return <ExampleOutputItem value={output} />;
+  // Single item
+  return <ExampleOutputItem data={data} />;
 }
 
-function ExampleOutputItem({ value }: { value: unknown }): React.ReactNode {
-  if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:'))) {
-    return <img src={value} alt="" className="rounded-lg w-full" />;
+/**
+ * Renders a single output item.
+ */
+function ExampleOutputItem({ data }: { data: unknown }): React.ReactElement {
+  // String that looks like a URL - render as image
+  if (typeof data === 'string') {
+    if (data.startsWith('http') || data.startsWith('data:')) {
+      return <img src={data} alt="" className="rounded-lg w-full" />;
+    }
+    // Plain string
+    return (
+      <pre className="text-xs text-[#525252] overflow-auto max-h-32">
+        {data}
+      </pre>
+    );
   }
+
+  // Convert to string for display
+  const displayText: string = (() => {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      return String(data);
+    }
+  })();
 
   return (
     <pre className="text-xs text-[#525252] overflow-auto max-h-32">
-      {JSON.stringify(value, null, 2)}
+      {displayText}
     </pre>
   );
 }
-
